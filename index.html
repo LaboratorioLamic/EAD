@@ -1188,6 +1188,7 @@ function onPlayerReady() {
     progressRange.oninput = () => {
         if (!ytPlayer) return;
         const duration = ytPlayer.getDuration() || 0;
+        if (duration === 0) return;
         const seekTo = (parseFloat(progressRange.value) / 100) * duration;
         ytPlayer.seekTo(seekTo, true);
         updateTimeUI();
