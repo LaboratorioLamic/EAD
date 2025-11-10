@@ -1167,78 +1167,71 @@ function onPlayerReady() {
         }
         
         function bindControls() {
-            playPauseBtn.onclick = () => {
-                if (!ytPlayer) return;
-                const state = ytPlayer.getPlayerState();
-                const YT_STATE = window.YT.PlayerState;
-                if (state !== YT_STATE.PLAYING) ytPlayer.playVideo(); else ytPlayer.pauseVideo();
-            };
-            muteBtn.onclick = () => {
-                if (!ytPlayer) return;
-                if (ytPlayer.isMuted()) { ytPlayer.unMute(); muteBtn.innerHTML = '<i class="fas fa-volume-high"></i>'; } else { ytPlayer.mute(); muteBtn.innerHTML = '<i class="fas fa-volume-xmark"></i>'; }
-            };
-            volumeRange.oninput = () => {
-                if (!ytPlayer) return;
-                ytPlayer.setVolume(parseInt(volumeRange.value, 10));
-                if (ytPlayer.isMuted() && parseInt(volumeRange.value, 10) > 0) {
-                    ytPlayer.unMute();
-                    muteBtn.innerHTML = '<i class="fas fa-volume-high"></i>';
-                }
-            };
-            progressRange.oninput = () => {
-                if (!ytPlayer) return;
-                if (currentTrainingId && currentThemeId != null && currentModuleIndex != null) {
-                    if (!completionStatus[currentTrainingId]?.[currentThemeId]?.[currentModuleIndex]) {
-                        showWarning('Você deve assistir o vídeo inteiro antes de avançar.');
-                        progressRange.value = (ytPlayer.getCurrentTime() / ytPlayer.getDuration()) * 100;
-                        return;
-                    }
-                }
-                const duration = ytPlayer.getDuration() || 0;
-                const seekTo = (parseFloat(progressRange.value) / 100) * duration;
-                ytPlayer.seekTo(seekTo, true);
-                updateTimeUI();
-            };
-            speedSelect.onchange = () => {
-                if (!ytPlayer) return;
-                ytPlayer.setPlaybackRate(parseFloat(speedSelect.value));
-            };
-            const fullscreenBtn = document.getElementById('fullscreen-btn');
-            if (fullscreenBtn) {
-                fullscreenBtn.onclick = () => {
-                    const container = document.getElementById('custom-player');
-                    const iframe = document.querySelector('#yt-frame iframe');
-                    const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || container.classList.contains('is-fullscreen'));
-                    if (!isFs) {
-                        const req = container.requestFullscreen || container.webkitRequestFullscreen || container.mozRequestFullScreen || container.msRequestFullscreen;
-                        if (req) {
-                            req.call(container).catch(() => {
-                                if (iframe && iframe.requestFullscreen) iframe.requestFullscreen();
-                            });
-                        } else if (iframe && iframe.requestFullscreen) {
-                            iframe.requestFullscreen();
-                        } else {
-                            container.classList.add('is-fullscreen');
-                        }
-                        fullscreenBtn.innerHTML = '<i class="fas fa-compress"></i>';
-                    } else {
-                        const exit = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
-                        if (exit) {
-                            exit.call(document);
-                        }
-                        container.classList.remove('is-fullscreen');
-                        fullscreenBtn.innerHTML = '<i class="fas fa-expand"></i>';
-                    }
-                };
-                document.addEventListener('fullscreenchange', () => {
-                    const fullscreenBtn = document.getElementById('fullscreen-btn');
-                    if (!fullscreenBtn) return;
-                    const active = !!document.fullscreenElement;
-                    fullscreenBtn.innerHTML = active ? '<i class="fas fa-compress"></i>' : '<i class="fas fa-expand"></i>';
-                });
-            }
+    playPauseBtn.onclick = () => {
+        if (!ytPlayer) return;
+        const state = ytPlayer.getPlayerState();
+        const YT_STATE = window.YT.PlayerState;
+        if (state !== YT_STATE.PLAYING) ytPlayer.playVideo(); else ytPlayer.pauseVideo();
+    };
+    muteBtn.onclick = () => {
+        if (!ytPlayer) return;
+        if (ytPlayer.isMuted()) { ytPlayer.unMute(); muteBtn.innerHTML = '<i class="fas fa-volume-high"></i>'; } else { ytPlayer.mute(); muteBtn.innerHTML = '<i class="fas fa-volume-xmark"></i>'; }
+    };
+    volumeRange.oninput = () => {
+        if (!ytPlayer) return;
+        ytPlayer.setVolume(parseInt(volumeRange.value, 10));
+        if (ytPlayer.isMuted() && parseInt(volumeRange.value, 10) > 0) {
+            ytPlayer.unMute();
+            muteBtn.innerHTML = '<i class="fas fa-volume-high"></i>';
         }
-        
+    };
+    progressRange.oninput = () => {
+        if (!ytPlayer) return;
+        const duration = ytPlayer.getDuration() || 0;
+        const seekTo = (parseFloat(progressRange.value) / 100) * duration;
+        ytPlayer.seekTo(seekTo, true);
+        updateTimeUI();
+    };
+    speedSelect.onchange = () => {
+        if (!ytPlayer) return;
+        ytPlayer.setPlaybackRate(parseFloat(speedSelect.value));
+    };
+    const fullscreenBtn = document.getElementById('fullscreen-btn');
+    if (fullscreenBtn) {
+        fullscreenBtn.onclick = () => {
+            const container = document.getElementById('custom-player');
+            const iframe = document.querySelector('#yt-frame iframe');
+            const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || container.classList.contains('is-fullscreen'));
+            if (!isFs) {
+                const req = container.requestFullscreen || container.webkitRequestFullscreen || container.mozRequestFullScreen || container.msRequestFullscreen;
+                if (req) {
+                    req.call(container).catch(() => {
+                        if (iframe && iframe.requestFullscreen) iframe.requestFullscreen();
+                    });
+                } else if (iframe && iframe.requestFullscreen) {
+                    iframe.requestFullscreen();
+                } else {
+                    container.classList.add('is-fullscreen');
+                }
+                fullscreenBtn.innerHTML = '<i class="fas fa-compress"></i>';
+            } else {
+                const exit = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+                if (exit) {
+                    exit.call(document);
+                }
+                container.classList.remove('is-fullscreen');
+                fullscreenBtn.innerHTML = '<i class="fas fa-expand"></i>';
+            }
+        };
+        document.addEventListener('fullscreenchange', () => {
+            const fullscreenBtn = document.getElementById('fullscreen-btn');
+            if (!fullscreenBtn) return;
+            const active = !!document.fullscreenElement;
+            fullscreenBtn.innerHTML = active ? '<i class="fas fa-compress"></i>' : '<i class="fas fa-expand"></i>';
+        });
+    }
+}
+
         function startProgressTimer() {
             stopProgressTimer();
             progressTimer = setInterval(() => {
