@@ -920,6 +920,7 @@
         // Variáveis globais para armazenar os dados do JSONBin
         let trainingData = {};
         let quizData = {};
+        let orderData = {};
         
         let nameOptions = []; // Armazena os nomes carregados para uso futuro, se necessário
         
@@ -968,6 +969,7 @@
                 const data = await response.json();
                 trainingData = data.record.trainingData || {};
                 quizData = data.record.quizData || {};
+                orderData = data.record.order || {};
                 populateDropdown();
                 // Load saved progression from localStorage after fetching data
                 loadProgression();
@@ -1284,7 +1286,15 @@ function onPlayerReady() {
         
         function populateDropdown() {
             dropdownList.innerHTML = '';
-            Object.keys(trainingData).forEach(subjectId => {
+            
+            // Usa ordenamento definido em orderData.subjects, se existir
+            let subjectIds = Object.keys(trainingData);
+            if (orderData.subjects && Array.isArray(orderData.subjects)) {
+                // Filtra apenas os IDs que existem em trainingData
+                subjectIds = orderData.subjects.filter(id => trainingData[id]);
+            }
+            
+            subjectIds.forEach(subjectId => {
                 const subject = trainingData[subjectId];
                 const subjectLi = document.createElement('li');
                 subjectLi.className = 'subject';
@@ -1307,7 +1317,15 @@ function onPlayerReady() {
         function populateThemeDropdown(subjectId) {
             themeDropdownList.innerHTML = '';
             const themes = trainingData[subjectId].themes;
-            Object.keys(themes).forEach(themeId => {
+            
+            // Usa ordenamento definido em orderData.themes, se existir
+            let themeIds = Object.keys(themes);
+            if (orderData.themes && orderData.themes[subjectId] && Array.isArray(orderData.themes[subjectId])) {
+                // Filtra apenas os IDs que existem em themes
+                themeIds = orderData.themes[subjectId].filter(id => themes[id]);
+            }
+            
+            themeIds.forEach(themeId => {
                 const theme = themes[themeId];
                 const themeLi = document.createElement('li');
                 themeLi.className = 'theme';
@@ -1322,201 +1340,205 @@ function onPlayerReady() {
                 themeDropdownList.appendChild(themeLi);
             });
         }
-        
-        function validateEmail(email) {
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            return emailRegex.test(email);
+
+function validateEmail(email) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+}
+
+document.getElementById('email').addEventListener('input', function() {
+    const emailInput = this;
+    if (!validateEmail(emailInput.value)) {
+        emailInput.classList.add('invalid');
+    } else {
+        emailInput.classList.remove('invalid');
+    }
+});
+
+function showWarning(message) {
+    warningText.textContent = message;
+    warningMessage.style.display = 'flex';
+    setTimeout(() => {
+        warningMessage.style.display = 'none';
+    }, 3000);
+}
+
+function renderPage(pageNum) {
+    pdfDoc.getPage(pageNum).then(page => {
+        const viewport = page.getViewport({ scale: 1.5 });
+        pdfCanvas.height = viewport.height;
+        pdfCanvas.width = viewport.width;
+        const context = pdfCanvas.getContext('2d');
+        page.render({ canvasContext: context, viewport: viewport });
+        currentPage = pageNum;
+        renderPagination();
+        if (currentPage === totalPages) {
+            markCurrentModuleCompleted();
         }
-        
-        document.getElementById('email').addEventListener('input', function() {
-            const emailInput = this;
-            if (!validateEmail(emailInput.value)) {
-                emailInput.classList.add('invalid');
-            } else {
-                emailInput.classList.remove('invalid');
+    });
+}
+
+function renderPagination() {
+    pdfNavigation.innerHTML = '';
+    const maxButtons = 3;
+    let startPage = Math.max(1, currentPage - Math.floor(maxButtons / 2));
+    let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+
+    if (endPage - startPage + 1 < maxButtons) {
+        startPage = Math.max(1, endPage - maxButtons + 1);
+    }
+
+    const firstBtn = document.createElement('button');
+    firstBtn.innerHTML = '<i class="fas fa-fast-backward"></i>';
+    firstBtn.disabled = currentPage === 1;
+    firstBtn.onclick = () => {
+        if (currentPage !== 1) {
+            renderPage(1);
+        }
+    };
+    pdfNavigation.appendChild(firstBtn);
+
+    for (let i = startPage; i <= endPage; i++) {
+        const btn = document.createElement('button');
+        btn.textContent = i;
+        btn.className = i === currentPage ? 'active' : '';
+        btn.onclick = () => renderPage(i);
+        pdfNavigation.appendChild(btn);
+    }
+
+    const lastBtn = document.createElement('button');
+    lastBtn.innerHTML = '<i class="fas fa-fast-forward"></i>';
+    lastBtn.disabled = currentPage === totalPages;
+    lastBtn.onclick = () => {
+        if (currentPage !== totalPages) {
+            renderPage(totalPages);
+        }
+    };
+    pdfNavigation.appendChild(lastBtn);
+}
+
+function loadPDF(pdfPath) {
+    const baseUrl = 'https://dl.dropboxusercontent.com/s/';
+    const fullUrl = `${baseUrl}${pdfPath}`;
+    fetch(fullUrl, { method: 'HEAD' })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
             }
+            return pdfjsLib.getDocument(fullUrl).promise;
+        })
+        .then(doc => {
+            pdfDoc = doc;
+            totalPages = doc.numPages;
+            currentPage = 1;
+            renderPage(currentPage);
+        })
+        .catch(error => {
+            console.error('Erro ao carregar PDF:', error);
+            showWarning('Não foi possível carregar o PDF. Verifique se o arquivo existe e é acessível.');
         });
-        
-        function showWarning(message) {
-            warningText.textContent = message;
-            warningMessage.style.display = 'flex';
-            setTimeout(() => {
-                warningMessage.style.display = 'none';
-            }, 3000);
-        }
-        
-        function renderPage(pageNum) {
-            pdfDoc.getPage(pageNum).then(page => {
-                const viewport = page.getViewport({ scale: 1.5 });
-                pdfCanvas.height = viewport.height;
-                pdfCanvas.width = viewport.width;
-                const context = pdfCanvas.getContext('2d');
-                page.render({ canvasContext: context, viewport: viewport });
-                currentPage = pageNum;
-                renderPagination();
-                if (currentPage === totalPages) {
-                    markCurrentModuleCompleted();
-                }
-            });
-        }
-        
-        function renderPagination() {
-            pdfNavigation.innerHTML = '';
-            const maxButtons = 3;
-            let startPage = Math.max(1, currentPage - Math.floor(maxButtons / 2));
-            let endPage = Math.min(totalPages, startPage + maxButtons - 1);
-        
-            if (endPage - startPage + 1 < maxButtons) {
-                startPage = Math.max(1, endPage - maxButtons + 1);
-            }
-        
-            const firstBtn = document.createElement('button');
-            firstBtn.innerHTML = '<i class="fas fa-fast-backward"></i>';
-            firstBtn.disabled = currentPage === 1;
-            firstBtn.onclick = () => {
-                if (currentPage !== 1) {
-                    renderPage(1);
-                }
-            };
-            pdfNavigation.appendChild(firstBtn);
-        
-            for (let i = startPage; i <= endPage; i++) {
-                const btn = document.createElement('button');
-                btn.textContent = i;
-                btn.className = i === currentPage ? 'active' : '';
-                btn.onclick = () => renderPage(i);
-                pdfNavigation.appendChild(btn);
-            }
-        
-            const lastBtn = document.createElement('button');
-            lastBtn.innerHTML = '<i class="fas fa-fast-forward"></i>';
-            lastBtn.disabled = currentPage === totalPages || 
-                (currentTrainingId && currentThemeId != null && currentModuleIndex != null && 
-                !completionStatus[currentTrainingId]?.[currentThemeId]?.[currentModuleIndex]);
-            lastBtn.onclick = () => {
-                if (currentPage !== totalPages) {
-                    if (currentTrainingId && currentThemeId != null && currentModuleIndex != null) {
-                        if (!completionStatus[currentTrainingId]?.[currentThemeId]?.[currentModuleIndex]) {
-                            showWarning('Você deve visualizar todas as páginas antes de usar o atalho para a última.');
-                            return;
-                        }
-                    }
-                    renderPage(totalPages);
-                }
-            };
-            pdfNavigation.appendChild(lastBtn);
-        }
-        
-        function loadPDF(pdfPath) {
-            const baseUrl = 'https://dl.dropboxusercontent.com/s/';
-            const fullUrl = `${baseUrl}${pdfPath}`;
-            fetch(fullUrl, { method: 'HEAD' })
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! Status: ${response.status}`);
-                    }
-                    return pdfjsLib.getDocument(fullUrl).promise;
-                })
-                .then(doc => {
-                    pdfDoc = doc;
-                    totalPages = doc.numPages;
-                    currentPage = 1;
-                    renderPage(currentPage);
-                })
-                .catch(error => {
-                    console.error('Erro ao carregar PDF:', error);
-                    showWarning('Não foi possível carregar o PDF. Verifique se o arquivo existe e é acessível.');
-                });
-        }
-        
-        btn.onclick = (e) => {
-            e.stopPropagation();
-            dropdownContent.style.display = dropdownContent.style.display === 'block' ? 'none' : 'block';
+}
+
+btn.onclick = (e) => {
+    e.stopPropagation();
+    dropdownContent.style.display = dropdownContent.style.display === 'block' ? 'none' : 'block';
+};
+
+themeBtn.onclick = (e) => {
+    e.stopPropagation();
+    if (!currentTrainingId) {
+        showWarning('Selecione o Tema.');
+        return;
+    }
+    themeDropdownContent.style.display = themeDropdownContent.style.display === 'block' ? 'none' : 'block';
+};
+
+document.addEventListener('click', (e) => {
+    if (!btn.contains(e.target) && !dropdownContent.contains(e.target)) {
+        dropdownContent.style.display = 'none';
+    }
+    if (!themeBtn.contains(e.target) && !themeDropdownContent.contains(e.target)) {
+        themeDropdownContent.style.display = 'none';
+    }
+});
+
+function loadTraining(subjectId, themeId) {
+    if (!subjectId || !themeId) return;
+    currentTrainingId = subjectId;
+    currentThemeId = themeId;
+    const theme = trainingData[subjectId].themes[themeId];
+    if (!theme) return;
+    contentDiv.style.display = 'block';
+    if (!completionStatus[subjectId]) completionStatus[subjectId] = {};
+    if (!completionStatus[subjectId][themeId] || completionStatus[subjectId][themeId].length !== theme.modules.length) {
+        completionStatus[subjectId][themeId] = new Array(theme.modules.length).fill(false);
+        saveProgression();
+    }
+    
+    // Usa ordenamento definido em orderData.modules, se existir
+    let moduleIndices = Array.from({length: theme.modules.length}, (_, i) => i);
+    if (orderData.modules && orderData.modules[subjectId] && orderData.modules[subjectId][themeId] && Array.isArray(orderData.modules[subjectId][themeId])) {
+        // Usa os índices definidos no order, filtrando apenas os válidos
+        moduleIndices = orderData.modules[subjectId][themeId].filter(index => index >= 0 && index < theme.modules.length);
+    }
+    
+    const firstModuleIndex = moduleIndices[0] || 0;
+    loadModule(theme.modules[firstModuleIndex], theme.modules, firstModuleIndex);
+    modulesDiv.innerHTML = '';
+    
+    moduleIndices.forEach((moduleIndex, displayIndex) => {
+        const mod = theme.modules[moduleIndex];
+        const div = document.createElement('div');
+        div.className = 'module';
+        div.innerHTML = renderModuleTitle(mod.title, completionStatus[subjectId][themeId][moduleIndex]);
+        if (completionStatus[subjectId][themeId][moduleIndex]) div.classList.add('completed');
+        div.onclick = () => {
+            document.querySelectorAll('.module').forEach(m => m.classList.remove('active'));
+            div.classList.add('active');
+            loadModule(mod, theme.modules, moduleIndex);
         };
-        
-        themeBtn.onclick = (e) => {
-            e.stopPropagation();
-            if (!currentTrainingId) {
-                showWarning('Selecione o Tema.');
-                return;
-            }
-            themeDropdownContent.style.display = themeDropdownContent.style.display === 'block' ? 'none' : 'block';
-        };
-        
-        document.addEventListener('click', (e) => {
-            if (!btn.contains(e.target) && !dropdownContent.contains(e.target)) {
-                dropdownContent.style.display = 'none';
-            }
-            if (!themeBtn.contains(e.target) && !themeDropdownContent.contains(e.target)) {
-                themeDropdownContent.style.display = 'none';
-            }
-        });
-        
-        function loadTraining(subjectId, themeId) {
-            if (!subjectId || !themeId) return;
-            currentTrainingId = subjectId;
-            currentThemeId = themeId;
-            const theme = trainingData[subjectId].themes[themeId];
-            if (!theme) return;
-            contentDiv.style.display = 'block';
-            if (!completionStatus[subjectId]) completionStatus[subjectId] = {};
-            if (!completionStatus[subjectId][themeId] || completionStatus[subjectId][themeId].length !== theme.modules.length) {
-                completionStatus[subjectId][themeId] = new Array(theme.modules.length).fill(false);
-                saveProgression();
-            }
-            loadModule(theme.modules[0], theme.modules, 0);
-            modulesDiv.innerHTML = '';
-            theme.modules.forEach((mod, index) => {
-                const div = document.createElement('div');
-                div.className = 'module';
-                div.innerHTML = renderModuleTitle(mod.title, completionStatus[subjectId][themeId][index]);
-                if (completionStatus[subjectId][themeId][index]) div.classList.add('completed');
-                div.onclick = () => {
-                    document.querySelectorAll('.module').forEach(m => m.classList.remove('active'));
-                    div.classList.add('active');
-                    loadModule(mod, theme.modules, index);
-                };
-                if (index === 0) div.classList.add('active');
-                modulesDiv.appendChild(div);
-            });
-            const assessmentDiv = document.createElement('div');
-            assessmentDiv.className = 'module';
-            assessmentDiv.id = 'assessment-module';
-            assessmentDiv.textContent = 'Avaliação';
-            if (assessmentResults[subjectId] && assessmentResults[subjectId][themeId]) {
-                assessmentDiv.classList.add('completed');
-                assessmentDiv.innerHTML = 'Avaliação <i class="fas fa-circle-check status-icon" aria-hidden="true"></i>';
-            }
-            assessmentDiv.onclick = () => {
-                document.querySelectorAll('.module').forEach(m => m.classList.remove('active'));
-                assessmentDiv.classList.add('active');
-                if (assessmentResults[subjectId] && assessmentResults[subjectId][themeId]) {
-                    showAssessmentResult(assessmentResults[subjectId][themeId]);
-                    return;
-                }
-                const allDone = completionStatus[subjectId][themeId].every(Boolean);
-                if (!allDone) {
-                    showWarning('Conclua todos os modulos');
-                    return;
-                }
-                if (typeof ytPlayer !== 'undefined' && ytPlayer && typeof ytPlayer.stopVideo === 'function') {
-                    ytPlayer.stopVideo();
-                }
-                customPlayerContainer.style.display = 'none';
-                video.style.display = 'none';
-                video.src = '';
-                pdfContainer.style.display = 'none';
-                document.body.classList.remove('cinema-active');
-                loadQuiz(subjectId, themeId);
-            };
-            modulesDiv.appendChild(assessmentDiv);
+        if (displayIndex === 0) div.classList.add('active');
+        modulesDiv.appendChild(div);
+    });
+    
+    const assessmentDiv = document.createElement('div');
+    assessmentDiv.className = 'module';
+    assessmentDiv.id = 'assessment-module';
+    assessmentDiv.textContent = 'Avaliação';
+    if (assessmentResults[subjectId] && assessmentResults[subjectId][themeId]) {
+        assessmentDiv.classList.add('completed');
+        assessmentDiv.innerHTML = 'Avaliação <i class="fas fa-circle-check status-icon" aria-hidden="true"></i>';
+    }
+    assessmentDiv.onclick = () => {
+        document.querySelectorAll('.module').forEach(m => m.classList.remove('active'));
+        assessmentDiv.classList.add('active');
+        if (assessmentResults[subjectId] && assessmentResults[subjectId][themeId]) {
+            showAssessmentResult(assessmentResults[subjectId][themeId]);
+            return;
         }
-        
-        function renderModuleTitle(title, completed) {
-            return completed ? `${title} <i class="fas fa-circle-check status-icon" aria-hidden="true"></i>` : title;
+        const allDone = completionStatus[subjectId][themeId].every(Boolean);
+        if (!allDone) {
+            showWarning('Conclua todos os modulos');
+            return;
         }
-        
-        function loadModule(mod, modules, moduleIndex) {
+        if (typeof ytPlayer !== 'undefined' && ytPlayer && typeof ytPlayer.stopVideo === 'function') {
+            ytPlayer.stopVideo();
+        }
+        customPlayerContainer.style.display = 'none';
+        video.style.display = 'none';
+        video.src = '';
+        pdfContainer.style.display = 'none';
+        document.body.classList.remove('cinema-active');
+        loadQuiz(subjectId, themeId);
+    };
+    modulesDiv.appendChild(assessmentDiv);
+}
+
+function renderModuleTitle(title, completed) {
+    return completed ? `${title} <i class="fas fa-circle-check status-icon" aria-hidden="true"></i>` : title;
+}
+
+function loadModule(mod, modules, moduleIndex) {
     resetContent();
     currentModuleIndex = moduleIndex;
 
@@ -1562,57 +1584,57 @@ function onPlayerReady() {
     attachmentContainer.style.display = mod.attachments.length > 0 ? 'flex' : 'none';
 }
 
-        function loadQuiz(subjectId, themeId) {
-            window.scrollTo({
-                top: 0,
-                behavior: 'smooth'
-            });
-            resetContent();
-            const quizKey = `${subjectId}_${themeId}`;
-            const questions = quizData[quizKey];
-            if (!questions) {
-                showWarning('Nenhuma avaliação disponível para este tema.');
-                return;
-            }
-            quizContainer.innerHTML = '';
-            selectedAnswers = {};
-            questions.forEach((q, index) => {
-                const card = document.createElement('div');
-                card.className = 'quiz-card';
-                card.id = `quiz-card-${index}`;
-                const h3 = document.createElement('h3');
-                h3.textContent = q.question;
-                card.appendChild(h3);
-                const order = Array.from({ length: q.options.length }, (_, i) => i);
-                for (let i = order.length - 1; i > 0; i--) {
-                    const j = Math.floor(Math.random() * (i + 1));
-                    [order[i], order[j]] = [order[j], order[i]];
-                }
-                order.forEach((optIndex) => {
-                    const opt = q.options[optIndex];
-                    const label = document.createElement('label');
-                    label.className = 'quiz-option';
-                    const input = document.createElement('input');
-                    input.type = 'radio';
-                    input.name = `q${index}`;
-                    input.value = optIndex;
-                    input.onchange = () => {
-                        selectedAnswers[index] = parseInt(input.value, 10);
-                        card.querySelectorAll('.quiz-option').forEach(opt => opt.classList.remove('selected'));
-                        label.classList.add('selected');
-                        card.classList.remove('missing');
-                    };
-                    label.appendChild(input);
-                    label.appendChild(document.createTextNode(` ${opt}`));
-                    card.appendChild(label);
-                });
-                quizContainer.appendChild(card);
-            });
-            quizContainer.appendChild(quizSubmit);
-            quizContainer.style.display = 'flex';
-            quizSubmit.onclick = () => calculateScore(subjectId, themeId);
+function loadQuiz(subjectId, themeId) {
+    window.scrollTo({
+        top: 0,
+        behavior: 'smooth'
+    });
+    resetContent();
+    const quizKey = `${subjectId}_${themeId}`;
+    const questions = quizData[quizKey];
+    if (!questions) {
+        showWarning('Nenhuma avaliação disponível para este tema.');
+        return;
+    }
+    quizContainer.innerHTML = '';
+    selectedAnswers = {};
+    questions.forEach((q, index) => {
+        const card = document.createElement('div');
+        card.className = 'quiz-card';
+        card.id = `quiz-card-${index}`;
+        const h3 = document.createElement('h3');
+        h3.textContent = q.question;
+        card.appendChild(h3);
+        const order = Array.from({ length: q.options.length }, (_, i) => i);
+        for (let i = order.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [order[i], order[j]] = [order[j], order[i]];
         }
-        
+        order.forEach((optIndex) => {
+            const opt = q.options[optIndex];
+            const label = document.createElement('label');
+            label.className = 'quiz-option';
+            const input = document.createElement('input');
+            input.type = 'radio';
+            input.name = `q${index}`;
+            input.value = optIndex;
+            input.onchange = () => {
+                selectedAnswers[index] = parseInt(input.value, 10);
+                card.querySelectorAll('.quiz-option').forEach(opt => opt.classList.remove('selected'));
+                label.classList.add('selected');
+                card.classList.remove('missing');
+            };
+            label.appendChild(input);
+            label.appendChild(document.createTextNode(` ${opt}`));
+            card.appendChild(label);
+        });
+        quizContainer.appendChild(card);
+    });
+    quizContainer.appendChild(quizSubmit);
+    quizContainer.style.display = 'flex';
+    quizSubmit.onclick = () => calculateScore(subjectId, themeId);
+}
+
 function calculateScore(subjectId, themeId) {
     const quizKey = `${subjectId}_${themeId}`;
     const questions = quizData[quizKey];
@@ -1876,77 +1898,75 @@ function submitForm(score, erros = '') {
             document.getElementById('comment-section').style.display = 'none';
         }
 
-
-            function addFinalButtons() {
-    // Botão "Refazer Avaliação"
-    let refazerBtn = document.getElementById('refazer-btn');
-    if (!refazerBtn) {
-        refazerBtn = document.createElement('button');
-        refazerBtn.id = 'refazer-btn';
-        refazerBtn.textContent = 'Refazer Avaliação';
-        refazerBtn.style.cssText = `
-            background-color: #28a745;
-            color: white;
-            padding: 10px 15px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 1em;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            display: block;
-            margin: 10px auto 0;
-            width: fit-content;
-        `;
-        refazerBtn.onmouseenter = () => {
-            refazerBtn.style.backgroundColor = '#218838';
-            refazerBtn.style.transform = 'scale(1.05)';
-        };
-        refazerBtn.onmouseleave = () => {
-            refazerBtn.style.backgroundColor = '#28a745';
-            refazerBtn.style.transform = 'scale(1)';
-        };
-        refazerBtn.onclick = () => loadQuiz(currentTrainingId, currentThemeId);
-        resultContainer.appendChild(refazerBtn);
-    }
-
-    // Botão "Reiniciar Curso"
-    let resetCourseBtn = document.getElementById('reset-course-btn');
-    if (!resetCourseBtn) {
-        resetCourseBtn = document.createElement('button');
-        resetCourseBtn.id = 'reset-course-btn';
-        resetCourseBtn.textContent = 'Reiniciar Curso';
-        resetCourseBtn.style.cssText = `
-            background-color: #dc3545;
-            color: white;
-            padding: 10px 15px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 1em;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            display: block;
-            margin: 10px auto 0;
-            width: fit-content;
-        `;
-        resetCourseBtn.onmouseenter = () => {
-            resetCourseBtn.style.backgroundColor = '#c82333';
-            resetCourseBtn.style.transform = 'scale(1.05)';
-        };
-        resetCourseBtn.onmouseleave = () => {
-            resetCourseBtn.style.backgroundColor = '#dc3545';
-            resetCourseBtn.style.transform = 'scale(1)';
-        };
-        resetCourseBtn.onclick = () => {
-            if (confirm('Tem certeza que deseja reiniciar o curso? Todo o progresso será perdido.')) {
-                resetCourseProgression();
+        function addFinalButtons() {
+            // Botão "Refazer Avaliação"
+            let refazerBtn = document.getElementById('refazer-btn');
+            if (!refazerBtn) {
+                refazerBtn = document.createElement('button');
+                refazerBtn.id = 'refazer-btn';
+                refazerBtn.textContent = 'Refazer Avaliação';
+                refazerBtn.style.cssText = `
+                    background-color: #28a745;
+                    color: white;
+                    padding: 10px 15px;
+                    border: none;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-size: 1em;
+                    font-weight: 600;
+                    transition: all 0.3s ease;
+                    display: block;
+                    margin: 10px auto 0;
+                    width: fit-content;
+                `;
+                refazerBtn.onmouseenter = () => {
+                    refazerBtn.style.backgroundColor = '#218838';
+                    refazerBtn.style.transform = 'scale(1.05)';
+                };
+                refazerBtn.onmouseleave = () => {
+                    refazerBtn.style.backgroundColor = '#28a745';
+                    refazerBtn.style.transform = 'scale(1)';
+                };
+                refazerBtn.onclick = () => loadQuiz(currentTrainingId, currentThemeId);
+                resultContainer.appendChild(refazerBtn);
             }
-        };
-        resultContainer.appendChild(resetCourseBtn);
-    }
-}
 
+            // Botão "Reiniciar Curso"
+            let resetCourseBtn = document.getElementById('reset-course-btn');
+            if (!resetCourseBtn) {
+                resetCourseBtn = document.createElement('button');
+                resetCourseBtn.id = 'reset-course-btn';
+                resetCourseBtn.textContent = 'Reiniciar Curso';
+                resetCourseBtn.style.cssText = `
+                    background-color: #dc3545;
+                    color: white;
+                    padding: 10px 15px;
+                    border: none;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-size: 1em;
+                    font-weight: 600;
+                    transition: all 0.3s ease;
+                    display: block;
+                    margin: 10px auto 0;
+                    width: fit-content;
+                `;
+                resetCourseBtn.onmouseenter = () => {
+                    resetCourseBtn.style.backgroundColor = '#c82333';
+                    resetCourseBtn.style.transform = 'scale(1.05)';
+                };
+                resetCourseBtn.onmouseleave = () => {
+                    resetCourseBtn.style.backgroundColor = '#dc3545';
+                    resetCourseBtn.style.transform = 'scale(1)';
+                };
+                resetCourseBtn.onclick = () => {
+                    if (confirm('Tem certeza que deseja reiniciar o curso? Todo o progresso será perdido.')) {
+                        resetCourseProgression();
+                    }
+                };
+                resultContainer.appendChild(resetCourseBtn);
+            }
+        }
 
 </script>
 </body>
