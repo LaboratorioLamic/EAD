@@ -1087,32 +1087,50 @@
         
         function initOrLoadVideo(videoId) {
     loadYouTubeAPI().then(() => {
+        // Verificação adicional para garantir que o YT.Player está disponível
+        if (!window.YT || !window.YT.Player) {
+            console.error('YouTube API não está completamente carregada');
+            return;
+        }
+        
         customPlayerContainer.style.display = 'block';
         video.style.display = 'none';
         currentVideoId = videoId;
 
         // Sempre recarrega o player com o novo vídeo
         if (ytPlayer) {
-            ytPlayer.destroy(); // Remove o player antigo
+            try {
+                ytPlayer.destroy(); // Remove o player antigo
+            } catch (e) {
+                console.warn('Erro ao destruir player anterior:', e);
+            }
             ytPlayer = null;
         }
 
-        ytPlayer = new YT.Player('yt-frame', {
-            height: '390',
-            width: '640',
-            videoId: videoId,
-            playerVars: {
-                controls: 0,
-                modestbranding: 1,
-                rel: 0,
-                fs: 1,
-                iv_load_policy: 3
-            },
-            events: {
-                'onReady': onPlayerReady,
-                'onStateChange': onPlayerStateChange
-            }
-        });
+        try {
+            ytPlayer = new YT.Player('yt-frame', {
+                height: '390',
+                width: '640',
+                videoId: videoId,
+                playerVars: {
+                    controls: 0,
+                    modestbranding: 1,
+                    rel: 0,
+                    fs: 1,
+                    iv_load_policy: 3
+                },
+                events: {
+                    'onReady': onPlayerReady,
+                    'onStateChange': onPlayerStateChange
+                }
+            });
+        } catch (error) {
+            console.error('Erro ao criar player do YouTube:', error);
+            // Tentar novamente após um pequeno delay
+            setTimeout(() => initOrLoadVideo(videoId), 1000);
+        }
+    }).catch(error => {
+        console.error('Erro ao carregar API do YouTube:', error);
     });
 }
 
