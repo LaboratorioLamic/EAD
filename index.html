@@ -530,6 +530,48 @@
             font-size: clamp(1em, 3vw, 1.2em);
             color: #4a5b7a;
         }
+        .answer-key {
+            background: #f8fafc;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-top: 20px;
+            max-width: 600px;
+            width: 100%;
+            text-align: left;
+        }
+        .answer-key h3 {
+            margin: 0 0 15px;
+            font-size: 1.2em;
+            color: #1a2b49;
+        }
+        .answer-key ul {
+            list-style: none;
+            padding: 0;
+        }
+        .answer-key li {
+            background: white;
+            padding: 15px;
+            border-radius: 6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 10px;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .answer-key li:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .answer-key li:last-child {
+            margin-bottom: 0;
+        }
+        .answer-key .selected-answer {
+            color: #dc3545;
+            font-weight: 600;
+        }
+        .answer-key .correct-answer {
+            color: #28a745;
+            font-weight: 600;
+        }
         .success-message {
             background: linear-gradient(135deg, #28a745, #34c759);
             color: white;
@@ -1820,18 +1862,18 @@ function submitForm(score, erros = '') {
         loadingSpinner.style.display = 'none';
         submitButton.disabled = false;
         submitButton.style.opacity = '1';
-        showResult(score);
+        showResult(score, erros);
     })
     .catch(error => {
         console.error('Erro ao enviar:', error);
         loadingSpinner.style.display = 'none';
         submitButton.disabled = false;
         submitButton.style.opacity = '1';
-        showResult(score);
+        showResult(score, erros);
     });
 }
 
-        function showResult(score) {
+        function showResult(score, erros = '') {
             resetContent();
             contentDiv.style.display = 'block';
             resultContainer.innerHTML = '';
@@ -1855,6 +1897,27 @@ function submitForm(score, erros = '') {
                 successDiv.className = 'success-message';
                 successDiv.innerHTML = '<i class="fas fa-trophy"></i> Parabéns pela aprovação!';
                 resultContainer.appendChild(successDiv);
+
+                if (erros) {
+                    const answerKeyDiv = document.createElement('div');
+                    answerKeyDiv.className = 'answer-key';
+                    const title = document.createElement('h3');
+                    title.textContent = 'Gabarito das Questões Incorretas';
+                    answerKeyDiv.appendChild(title);
+                    const list = document.createElement('ul');
+                    const errorItems = erros.split('---').filter(item => item.trim());
+                    errorItems.forEach(item => {
+                        const lines = item.split('\n').map(l => l.trim());
+                        const questionText = lines[0];
+                        const userAnswer = lines.find(l => l.startsWith(';Resposta:'))?.replace(';Resposta:', '').trim();
+                        const correct = lines.find(l => l.startsWith(';Gabarito:'))?.replace(';Gabarito:', '').trim();
+                        const li = document.createElement('li');
+                        li.innerHTML = `<strong>${questionText}</strong><br><span class="selected-answer">Resposta: ${userAnswer}</span><br><span class="correct-answer">Gabarito: ${correct}</span>`;
+                        list.appendChild(li);
+                    });
+                    answerKeyDiv.appendChild(list);
+                    resultContainer.appendChild(answerKeyDiv);
+                }
 
                 if (!assessmentResults[currentTrainingId]) assessmentResults[currentTrainingId] = {};
                 assessmentResults[currentTrainingId][currentThemeId] = score;
